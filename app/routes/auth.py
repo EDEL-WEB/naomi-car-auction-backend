@@ -1,0 +1,107 @@
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import create_access_token, create_refresh_token
+from app import db
+from app.models.user import User
+from app.utils.validators import validate_user_input, error_response, success_response
+
+auth_bp = Blueprint('auth', __name__)
+
+
+@auth_bp.route('/register', methods=['POST'])
+def register():
+    """Register a new user"""
+    data = request.get_json()
+    
+    if not data:
+        return error_response('No data provided', 400)
+    
+    # Validate input
+    errors = validate_user_input(data)
+    if errors:
+        return error_response(', '.join(errors), 400)
+    
+    # Check if user already exists
+    if User.query.filter_by(username=data['username']).first():
+        return error_response('Username already exists', 409)
+    
+    if User.query.filter_by(email=data['email']).first():
+        return error_response('Email already exists', 409)
+    
+    # Create new user
+    user = User(
+        username=data['username'],
+        email=data['email'],
+        phone=data.get('phone'),
+        address=data.get('address')
+    )
+    user.set_password(data['password'])
+    
+    try:
+        db.session.add(user)
+        db.session.commit()
+        
+        return success_response(
+            {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'message': 'User registered successfully'
+            },
+            'User created successfully',
+            201
+        )
+    except Exception as e:
+        db.session.rollback()
+        return error_response(f'Error creating user: {str(e)}', 500)
+
+
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    """Login user and return JWT token"""
+    data = request.get_json()
+    
+    if not data or not data.get('username') or not data.get('password'):
+        return error_response('Username and password required', 400)
+    
+    user = User.query.filter_by(username=data['username']).first()
+    
+    if not user or not user.check_password(data['password']):
+        return error_response('Invalid username or password', 401)
+    
+    # Create tokens
+    access_token = create_access_token(identity=user.id)
+    refresh_token = create_refresh_token(identity=user.id)
+    
+    return success_response(
+        {
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'user': user.to_dict()
+        },
+        'Login successful'
+    )
+
+
+@auth_bp.route('/refresh', methods=['POST'])
+def refresh():
+    """Refresh access token using refresh token"""
+    from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+    
+    try:
+        verify_jwt_in_request(refresh=True)
+        user_id = get_jwt_identity()
+        
+        new_access_token = create_access_token(identity=user_id)
+        
+        return success_response(
+            {'access_token': new_access_token},
+            'Token refreshed successfully'
+        )
+    except Exception as e:
+        return error_response(f'Token refresh failed: {str(e)}', 401)
+
+
+@auth_bp.route('/logout', methods=['POST'])
+def logout():
+    """Logout user (token blacklisting can be added here)"""
+    return success_response(None, 'Logout successful')

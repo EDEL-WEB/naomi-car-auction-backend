@@ -1,0 +1,28 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+Flask = "*"
+Flask-SQLAlchemy = "*"
+Flask-Migrate = "*"
+Flask-JWT-Extended = "*"
+Flask-CORS = "*"
+Flask-SocketIO = "*"
+python-socketio = "*"
+python-dotenv = "*"
+psycopg2-binary = "*"
+Werkzeug = "*"
+cloudinary = "*"
+Pillow = "*"
+cloudinary = "*"
+python-magic = "*"
+email-validator = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-flask = "*"
+
+[requires]
+python_version = "3.9"
