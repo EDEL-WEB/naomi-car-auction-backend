@@ -61,17 +61,23 @@ def validate_user_input(data):
     """Validate user input data"""
     errors = []
     
-    if 'username' in data:
+    # Check required fields
+    required_fields = ['username', 'email', 'password']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            errors.append(f'{field} is required')
+    
+    if 'username' in data and data['username']:
         if len(data['username']) < 3:
             errors.append('username must be at least 3 characters')
         if len(data['username']) > 80:
             errors.append('username must be at most 80 characters')
     
-    if 'email' in data:
+    if 'email' in data and data['email']:
         if '@' not in data['email'] or '.' not in data['email']:
             errors.append('email must be valid')
     
-    if 'password' in data:
+    if 'password' in data and data['password']:
         if len(data['password']) < 6:
             errors.append('password must be at least 6 characters')
     

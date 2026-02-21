@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
-from app import db
+from sqlalchemy.orm import joinedload
+from app import db, limiter
 from app.models.auction import Auction
 from app.models.user import User
 from app.models.car_specification import CarSpecification
@@ -20,10 +21,11 @@ def get_auctions():
         max_price = request.args.get('max_price')
         status = request.args.get('status', 'active')
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)  # Cap at 100
         image = request.args.get('image')
         
-        query = Auction.query
+        # Fix N+1 query by eager loading seller
+        query = Auction.query.options(joinedload(Auction.seller))
         
         # Apply filters
         if brand:
@@ -65,7 +67,12 @@ def get_auctions():
 def get_auction(auction_id):
     """Get a specific auction"""
     try:
-        auction = Auction.query.get(auction_id)
+        # Fix N+1 query by eager loading relationships
+        auction = Auction.query.options(
+            joinedload(Auction.seller),
+            joinedload(Auction.car_spec),
+            joinedload(Auction.images)
+        ).get(auction_id)
         
         if not auction:
             return error_response('Auction not found', 404)
@@ -76,8 +83,12 @@ def get_auction(auction_id):
         if auction.car_spec:
             auction_data['car_specification'] = auction.car_spec.to_dict()
         
-        # Include recent bids
-        recent_bids = auction.bids.order_by(db.desc(db.Bid.timestamp)).limit(10).all()
+        # Include recent bids with user info (fix N+1)
+        from app.models.bid import Bid
+        from app.models.user import User
+        recent_bids = db.session.query(Bid).options(
+            joinedload(Bid.bidder)
+        ).filter_by(auction_id=auction_id).order_by(Bid.timestamp.desc()).limit(10).all()
         auction_data['recent_bids'] = [bid.to_dict(include_user=True) for bid in recent_bids]
         
         return success_response(auction_data, 'Auction retrieved successfully')
@@ -87,6 +98,7 @@ def get_auction(auction_id):
 
 
 @auctions_bp.route('', methods=['POST'])
+@limiter.limit("10 per hour")
 def create_auction():
     """Create a new auction"""
     try:

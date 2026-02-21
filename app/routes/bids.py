@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
-from app import db, socketio
+from sqlalchemy.orm import joinedload
+from app import db, socketio, limiter
 from app.models.bid import Bid
 from app.models.auction import Auction
 from app.utils.validators import validate_bid_input, error_response, success_response
@@ -21,9 +22,12 @@ def get_auction_bids(auction_id):
             return error_response('Auction not found', 404)
         
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
+        per_page = min(request.args.get('per_page', 50, type=int), 100)  # Cap at 100
         
-        paginated = auction.bids.order_by(Bid.timestamp.desc()).paginate(
+        # Fix N+1 query by eager loading bidder
+        paginated = db.session.query(Bid).options(
+            joinedload(Bid.bidder)
+        ).filter_by(auction_id=auction_id).order_by(Bid.timestamp.desc()).paginate(
             page=page,
             per_page=per_page,
             error_out=False
@@ -45,6 +49,7 @@ def get_auction_bids(auction_id):
 
 
 @bids_bp.route('/auction/<int:auction_id>', methods=['POST'])
+@limiter.limit("30 per hour")
 def place_bid(auction_id):
     """Place a bid on an auction"""
     try:
@@ -147,7 +152,7 @@ def get_user_bids():
         user_id = get_jwt_identity()
         
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
+        per_page = min(request.args.get('per_page', 50, type=int), 100)  # Cap at 100
         
         paginated = Bid.query.filter_by(user_id=user_id).order_by(Bid.timestamp.desc()).paginate(
             page=page,

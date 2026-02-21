@@ -10,6 +10,10 @@ class Bid(db.Model):
     auction_id = db.Column(db.Integer, db.ForeignKey('auctions.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     bid_amount = db.Column(db.Float, nullable=False)
+    max_bid = db.Column(db.Float, nullable=True)  # For proxy bidding
+    is_proxy = db.Column(db.Boolean, default=False)  # Is this a proxy bid
+    is_retracted = db.Column(db.Boolean, default=False)  # Bid retraction
+    retraction_reason = db.Column(db.String(500), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     
     # Indexes for common queries
@@ -24,6 +28,8 @@ class Bid(db.Model):
             'auction_id': self.auction_id,
             'user_id': self.user_id,
             'bid_amount': self.bid_amount,
+            'is_proxy': self.is_proxy,
+            'is_retracted': self.is_retracted,
             'timestamp': self.timestamp.isoformat()
         }
         

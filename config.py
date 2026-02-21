@@ -5,9 +5,18 @@ from datetime import timedelta
 class Config:
     """Base configuration"""
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,
+        'pool_recycle': 3600,
+        'pool_pre_ping': True
+    }
+    
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+    
+    # Redis configuration for JWT blacklist
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     
     # Socket.io configuration
     SOCKETIO_MESSAGE_QUEUE = os.getenv('SOCKETIO_MESSAGE_QUEUE', None)
@@ -16,6 +25,14 @@ class Config:
     # Auction configuration
     MINIMUM_BID_INCREMENT = 100  # Minimum bid increase amount
     AUCTION_CHECK_INTERVAL = 60  # Seconds between auction status checks
+    
+    # Pagination limits
+    MAX_PER_PAGE = 100
+    DEFAULT_PER_PAGE = 20
+    
+    # Rate limiting
+    RATELIMIT_STORAGE_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    RATELIMIT_STRATEGY = 'fixed-window'
     
     # Cloudinary configuration
     CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
