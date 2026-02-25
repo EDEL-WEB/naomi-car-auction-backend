@@ -6,6 +6,7 @@ from app.models.auction import Auction
 from app.models.user import User
 from app.models.car_specification import CarSpecification
 from app.utils.validators import validate_auction_input, error_response, success_response
+from app.utils.decorators import seller_required
 from datetime import datetime
 
 auctions_bp = Blueprint('auctions', __name__)
@@ -99,12 +100,10 @@ def get_auction(auction_id):
 
 @auctions_bp.route('', methods=['POST'])
 @limiter.limit("10 per hour")
-def create_auction():
-    """Create a new auction"""
+@seller_required
+def create_auction(user_id):
+    """Create a new auction (seller or admin only)"""
     try:
-        verify_jwt_in_request()
-        user_id = get_jwt_identity()
-        
         data = request.get_json()
         
         if not data:
@@ -159,12 +158,10 @@ def create_auction():
 
 
 @auctions_bp.route('/<int:auction_id>', methods=['PUT'])
-def update_auction(auction_id):
-    """Update an auction"""
+@seller_required
+def update_auction(user_id, auction_id):
+    """Update an auction (seller/admin only)"""
     try:
-        verify_jwt_in_request()
-        user_id = get_jwt_identity()
-        
         auction = Auction.query.get(auction_id)
         
         if not auction:
@@ -196,12 +193,10 @@ def update_auction(auction_id):
 
 
 @auctions_bp.route('/<int:auction_id>', methods=['DELETE'])
-def delete_auction(auction_id):
-    """Delete an auction"""
+@seller_required
+def delete_auction(user_id, auction_id):
+    """Delete an auction (seller/admin only)"""
     try:
-        verify_jwt_in_request()
-        user_id = get_jwt_identity()
-        
         auction = Auction.query.get(auction_id)
         
         if not auction:

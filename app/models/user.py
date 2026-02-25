@@ -13,7 +13,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     phone = db.Column(db.String(20), nullable=True)
     address = db.Column(db.String(200), nullable=True)
-    role = db.Column(db.String(20), default="user", index=True)  # 'user', 'seller', 'admin'
+    role = db.Column(db.String(20), default="buyer", nullable=False, index=True)  # 'buyer', 'seller', 'admin'
+    approved = db.Column(db.Boolean, default=True, nullable=False, index=True)  # False = unapproved sellers
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -38,6 +39,8 @@ class User(db.Model):
             'email': self.email,
             'phone': self.phone,
             'address': self.address,
+            'role': self.role,
+            'approved': self.approved,
             'created_at': self.created_at.isoformat()
         }
     

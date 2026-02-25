@@ -57,6 +57,7 @@ def create_app(config_name='development'):
     from app.routes.watchlist import watchlist_bp
     from app.routes.ratings import ratings_bp
     from app.routes.advanced import advanced_bp
+    from app.routes.sellers import sellers_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(auctions_bp, url_prefix='/api/auctions')
@@ -69,6 +70,7 @@ def create_app(config_name='development'):
     app.register_blueprint(watchlist_bp, url_prefix='/api/watchlist')
     app.register_blueprint(ratings_bp, url_prefix='/api/ratings')
     app.register_blueprint(advanced_bp, url_prefix='/api/advanced')
+    app.register_blueprint(sellers_bp, url_prefix='/api/sellers')
     
     # Register socket.io events
     from app.events.socket_events import register_socket_events
@@ -82,6 +84,10 @@ def create_app(config_name='development'):
     # Create tables
     with app.app_context():
         db.create_all()
+    
+    # Register CLI commands
+    from app.cli import register_cli_commands
+    register_cli_commands(app)
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])

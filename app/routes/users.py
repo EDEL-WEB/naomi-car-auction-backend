@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+from datetime import datetime
 from app import db
 from app.models.user import User
 from app.models.auction import Auction
 from app.models.bid import Bid
 from app.utils.validators import validate_user_input, error_response, success_response
+from app.utils.decorators import admin_required, role_required
 
 users_bp = Blueprint('users', __name__)
 
@@ -197,3 +199,133 @@ def get_user_bids_list(user_id):
     
     except Exception as e:
         return error_response(f'Error retrieving user bids: {str(e)}', 500)
+
+
+# ============ ADMIN SELLER APPROVAL ENDPOINTS ============
+
+@users_bp.route('/admin/pending-sellers', methods=['GET'])
+@admin_required
+def get_pending_sellers(user_id):
+    """Get all unapproved sellers (Admin only)"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        # Get unapproved sellers
+        paginated = User.query.filter_by(role='seller', approved=False).order_by(
+            User.created_at.asc()
+        ).paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        pending_sellers = [u.to_dict() for u in paginated.items]
+        
+        return success_response({
+            'pending_sellers': pending_sellers,
+            'total': paginated.total,
+            'pages': paginated.pages,
+            'current_page': page
+        }, 'Pending sellers retrieved successfully')
+    
+    except Exception as e:
+        return error_response(f'Error retrieving pending sellers: {str(e)}', 500)
+
+
+@users_bp.route('/admin/sellers/<int:seller_id>/approve', methods=['POST'])
+@admin_required
+def approve_seller(user_id, seller_id):
+    """Approve a seller (Admin only)"""
+    try:
+        seller = User.query.get(seller_id)
+        
+        if not seller:
+            return error_response('User not found', 404)
+        
+        if seller.role != 'seller':
+            return error_response('User is not a seller', 400)
+        
+        if seller.approved:
+            return error_response('Seller is already approved', 400)
+        
+        # Approve seller
+        seller.approved = True
+        db.session.commit()
+        
+        return success_response(
+            seller.to_dict(),
+            f'Seller "{seller.username}" approved successfully'
+        )
+    
+    except Exception as e:
+        db.session.rollback()
+        return error_response(f'Error approving seller: {str(e)}', 500)
+
+
+@users_bp.route('/admin/sellers/<int:seller_id>/reject', methods=['POST'])
+@admin_required
+def reject_seller(user_id, seller_id):
+    """Reject a seller application (Admin only)"""
+    try:
+        seller = User.query.get(seller_id)
+        
+        if not seller:
+            return error_response('User not found', 404)
+        
+        if seller.role != 'seller':
+            return error_response('User is not a seller', 400)
+        
+        data = request.get_json() or {}
+        reason = data.get('reason', 'Application rejected')
+        
+        # Revert to buyer
+        seller.role = 'buyer'
+        seller.approved = True
+        db.session.commit()
+        
+        return success_response({
+            'user': seller.to_dict(),
+            'reason': reason
+        }, 'Seller application rejected')
+    
+    except Exception as e:
+        db.session.rollback()
+        return error_response(f'Error rejecting seller: {str(e)}', 500)
+
+
+@users_bp.route('/admin/users/<int:target_user_id>/role', methods=['PUT'])
+@admin_required
+def change_user_role(user_id, target_user_id):
+    """Change a user's role (Admin only)"""
+    try:
+        target_user = User.query.get(target_user_id)
+        
+        if not target_user:
+            return error_response('User not found', 404)
+        
+        data = request.get_json()
+        if not data or 'role' not in data:
+            return error_response('Role required', 400)
+        
+        new_role = data['role'].lower()
+        
+        if new_role not in ['buyer', 'seller', 'admin']:
+            return error_response('Invalid role. Must be "buyer", "seller", or "admin".', 400)
+        
+        # You cannot change your own role
+        if user_id == target_user_id:
+            return error_response('Cannot change your own role', 400)
+        
+        target_user.role = new_role
+        target_user.approved = True if new_role != 'seller' else data.get('approved', False)
+        db.session.commit()
+        
+        return success_response(
+            target_user.to_dict(),
+            f'User role changed to "{new_role}"'
+        )
+    
+    except Exception as e:
+        db.session.rollback()
+        return error_response(f'Error changing role: {str(e)}', 500)
